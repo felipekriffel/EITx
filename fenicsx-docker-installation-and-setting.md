@@ -1,10 +1,14 @@
 # FENICSX DOCKER INSTALLING AND SETTING
 
+This file explains procedures used to install and set an Docker enviroment for work with Fenicsx.
+
 Docker may be installed on Ubuntu simply using apt with apt install docker.
 However, it is installed by default needing root permissions. Following
 procedure may be made to grant permissions:
 - [https://docs.docker.com/engine/install/linux-postinstall/] 
 - [https://docs.docker.com/engine/install/linux-postinstall/]
+
+## Creating Fenicsx Container
 
 Dolfinx/Fenicsx has a docker image available on the online Docker image
 repository, that may be installed and run locally through a docker container.
@@ -26,10 +30,11 @@ Once installed, it may initialize a container with the following command (in
 this case, running Jupyter Lab image):
 
 ```bash
-docker run -ti -v $(pwd):/home/fenics/shared -p 8080:80 -d dolfinx/lab:stable 
+docker run --name $name -ti -v $(pwd):/home/fenics/shared -p 8080:80 -d dolfinx/lab:stable 
 ```
 
 About the options:
+ * `--name` specifies an name to check and access the container, specified by `$name`;
  * `-ti` creates container and an interactive terminal;
  * `-v` mounts the local file volume into the container, sharing the files between
    the respective folders.
@@ -46,7 +51,7 @@ command later. You may check the actual container id with `docker ps`.
 To access container terminal, it may be done through the following command (where `$id` should be replaced with the actual container ID):
 
 ```bash
-docker exec -it $id bash
+docker exec -it $name bash
 ```
 
 More about the flags and options:
@@ -58,6 +63,8 @@ More about the flags and options:
 More about running docker sharing local files:
  * https://fenics.readthedocs.io/projects/containers/en/latest/introduction.html#sharing-files-from-the-host-into-the-container
  * https://fenicsproject.discourse.group/t/workflow-of-docker-jupyter-notebook-with-dolfinx/851
+
+
    
 ## SETTING COMPLEX MODE
 
@@ -73,7 +80,7 @@ installing, that may be simply switched through terminal in the container.
 To do so, run the docker container terminal with:
 
 ```bash
-docker exec -it $id bash
+docker exec -it $name bash
 ```
 
 Once inside the container terminal, runs the following command to activate
@@ -86,6 +93,12 @@ To switch back to real mode, runs:
 
 ```bash
 source /usr/local/bin/dolfinx-real-mode
+```
+
+One can also run this command without opening a terminal in container through:
+
+```bash
+docker exec -it $name bash -c "source /usr/local/bin/dolfinx-real-mode"
 ```
 
 With the mode set, you may simply run any codes and it will be already working properly with the needed case.
