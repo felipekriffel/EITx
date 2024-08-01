@@ -336,7 +336,7 @@ class DirectProblem:
       L_vector = dolfinx.fem.petsc.assemble_vector(L_form)
       L_nparray = L_vector.getValues(range(L_vector.getSize()))
 
-      L_array.append(np.block([L_nparray,np.zeros(L)]))
+      L_array.append(np.block([L_nparray,np.zeros(self.L)]))
 
 
     ws, Ws = self.solve_problem_vector(L_array)
@@ -346,15 +346,13 @@ class DirectProblem:
     """
     Get sigma_list direction, returns F'(gamma)* sigma_list
     """
-    if not self.adjoint_set:
-      self.setAdjointProblem()
-
-    psi_list, Psi_list  = self.problem_adj.solve_problem_current(sigma_list)
+    psi_list, Psi_list  = self.solve_adjoint_problem(sigma_list)
     grad_psi_list = [compute_gradient(psi) for psi in psi_list]
     grad_u_list = [compute_gradient(u) for u in u_list]
     adj = dolfinx.fem.Function(self.V0)
     adj_j_array = np.zeros_like(adj.x.array)
 
+    l = len(u_list)
     for j in range(l):
       graduj = grad_u_list[j]
       gradpsij = grad_psi_list[j]
@@ -401,7 +399,7 @@ class InverseProblem(DirectProblem):
   
     #"First guess and weight functions"
     self.firstguess_array = np.full(self.K,1+1j)        #First guess for Forwardproblem
-    self.weight=np.ones(self.K)             #Initial weight function
+    self.weight=np.eye(self.K)             #Initial weight function
     self.I_all = I_all
     
     #"Solver configurations"
@@ -570,6 +568,8 @@ class InverseProblem(DirectProblem):
     :res_array:
     :err_array:
     """
+    if self.weight_value: 
+      self.weight = np.diag(1/self.cell_area_array)
     #starting gamma_0 and U_array
     gamma_n = dolfinx.fem.Function(self.V0)
     gamma_n.x.array[:] = self.firstguess_array
@@ -596,7 +596,7 @@ class InverseProblem(DirectProblem):
       print("starting outer step", n+1)
       ### compute step
       gamma_n = self.solve_step(gamma_n, un_list, Un_array, U_array)
-
+      
       ### solve direct problem
       self.set_problem(gamma_n)
       un_list, Un_list = self.solve_problem_current(self.I_all)
@@ -613,6 +613,7 @@ class InverseProblem(DirectProblem):
 
   def solve_step(self,gamma_n,un_list, Un_array,U_array):
     jacobian = self.calc_jacobian(un_list)
+    adj = self.weight @ jacobian.T.conj()
     bn = U_array - Un_array
     residual_norm_n = np.linalg.norm(bn)
     inside_residual = residual_norm_n
@@ -623,19 +624,29 @@ class InverseProblem(DirectProblem):
     if self.inner_method == "Landweber":  
       while np.linalg.norm(inside_residual) >= self.mu_i * residual_norm_n and k<self.innerstep_limit:
         inside_residual = jacobian @ sn_array - bn
-        sn_array -= self.land_a * jacobian.T.conj() @ (inside_residual)
+        sn_array -= self.land_a * adj @ (inside_residual)
         k+=1
+      
+      print(f"Inner iteration finished with {k} iterations")
 
-      gamma_n.x.array[:] = gamma_n.x.array + sn_array    
+      gamma_n_array = gamma_n.x.array + sn_array    
+      gamma_n_array.real = np.where(gamma_n_array.real<self.min_v,self.min_v,gamma_n_array.real)
+      gamma_n_array.imag = np.where(gamma_n_array.imag<self.min_v,self.min_v,gamma_n_array.imag)
+      gamma_n.x.array[:] = gamma_n_array
+
 
     elif self.inner_method == "Tikhonov":
       while np.linalg.norm(inside_residual) >= self.mu_i * residual_norm_n and k<self.innerstep_limit:
         inside_residual = jacobian @ sn_array - bn
         alpha_k=self.Tik_c0*(self.Tik_q**k)
-        sn_array = np.linalg.solve(jacobian.T.conj()@ jacobian + alpha_k*np.eye(self.N), jacobian.T.conj()@U_array + alpha_k*sn_array)
+        sn_array = np.linalg.solve(adj @ jacobian + alpha_k*np.eye(self.K), adj @bn + alpha_k*sn_array)
         k+=1
-
-      gamma_n.x.array[:] = gamma_n.x.array + sn_array
+      print(f"Inner iteration finished with {k} iterations")
+      
+      gamma_n_array = gamma_n.x.array + sn_array    
+      gamma_n_array.real = np.where(gamma_n_array.real<self.min_v,self.min_v,gamma_n_array.real)
+      gamma_n_array.imag = np.where(gamma_n_array.imag<self.min_v,self.min_v,gamma_n_array.imag)
+      gamma_n.x.array[:] = gamma_n_array
     
     return gamma_n
 
