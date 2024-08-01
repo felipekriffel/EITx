@@ -109,6 +109,7 @@ class MeshClass:
     gmsh.option.setNumber("Mesh.MeshSizeExtendFromBoundary", 0)
     gmsh.option.setNumber("Mesh.MeshSizeFromPoints", 0)
     gmsh.option.setNumber("Mesh.MeshSizeFromCurvature", 0)
+    gmsh.option.setNumber("Mesh.Algorithm", 5)
     gmsh.model.mesh.generate(gdim)
 
     return gmshio.model_to_mesh(gmsh.model, mesh_comm, gmsh_model_rank, gdim=2)
@@ -405,6 +406,7 @@ class InverseProblem(DirectProblem):
     #"Solver configurations"
     self.verbose=False
     self.weight_value=False    #Are you going to use the weight function in the Jacobian matrix?
+    self.weight_type = "Areas" #"Areas" for only area inverses, "Jacobian" for area and Jacobian column norm weights
     self.step_limit=30        #Step limit while solve
     self.innerstep_limit=1000 #Inner step limit while solve
     self.min_v=1E-3           #Minimal value in element for gamma_k
@@ -613,7 +615,11 @@ class InverseProblem(DirectProblem):
 
   def solve_step(self,gamma_n,un_list, Un_array,U_array):
     jacobian = self.calc_jacobian(un_list)
-    adj = self.weight @ jacobian.T.conj()
+    if self.weight_type=="Area":
+      adj = self.weight @ jacobian.T.conj()
+    elif self.weight_type=="Jacobian":
+      jac_norms = np.diag(np.linalg.norm(jacobian,axis=0))
+      adj = jac_norms @ self.weight @ jacobian.T.conj()
     bn = U_array - Un_array
     residual_norm_n = np.linalg.norm(bn)
     inside_residual = residual_norm_n
@@ -770,7 +776,7 @@ def current_method(L,l, method=1, value=1):
     return I_all
 
 
-def plot_tent_function(u):
+def plot_tent_function(u,savefile=False, filename=''):
   pyvista.start_xvfb()
   
   # Ploting
@@ -790,8 +796,10 @@ def plot_tent_function(u):
   p.set_background("white")
   if not pyvista.OFF_SCREEN:
       p.show(jupyter_backend="static")
+  if savefile:
+    p.screenshot(filename+".png") 
 
-def plot_indicator_function(u):
+def plot_indicator_function(u,savefile=False, filename=''):
   # Ploting
   pyvista.start_xvfb()
   u_mesh = u.function_space.mesh
@@ -811,8 +819,11 @@ def plot_indicator_function(u):
   p.view_xy()
   p.set_background("white")
   if not pyvista.OFF_SCREEN:
-      p.show(jupyter_backend="static")
+    p.show(jupyter_backend="static")
+  if savefile:
+    p.screenshot(filename+".png")    
 
+  p.close()
 
 def get_boundary_data(u):
   """
