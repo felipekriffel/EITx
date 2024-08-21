@@ -1,15 +1,11 @@
-import sys
 import dolfinx
 from mpi4py import MPI #import parallel communicator
 import numpy as np
 import ufl
-import matplotlib.pyplot as plt
 import dolfinx.fem.petsc
 from dolfinx.io import gmshio
 import gmsh
 import pyvista
-import time
-import pandas as pd
 import scipy as sp
 import basix
 from petsc4py import PETSc #Linear algebra lib
@@ -157,6 +153,7 @@ class DirectProblem:
     self.adjoint_set = False
     self.z_values = z_values
     self.z_petsc_array = [dolfinx.fem.Constant(self.mesh, PETSc.ScalarType(z_value)) for z_value in self.z_values]
+    self.rtol = 1e-10
 
     self.set_submatrices()
 
@@ -220,7 +217,7 @@ class DirectProblem:
     self.assembled = True
 
 
-  def solve_problem_current(self, I_all,save=False):
+  def solve_problem_current(self, I_all,gamma=None,save=False):
     """
       Solve the normal problem (A^h A) u = (A^h) b, given the I_all current array
       Matrix needs to have been assembled through method `set_problem`
@@ -233,6 +230,9 @@ class DirectProblem:
       :u_list: list of dolfinx.fem.Function objects, for each potentital distribution
       :U_list: list of np.array objects, for each measured potential pattern array
     """
+    if gamma!=None:
+       self.set_problem(gamma)
+
     if not self.assembled:
       raise Exception("The problem operator has not been assembled")
 
@@ -244,7 +244,10 @@ class DirectProblem:
 
     for k in range(l):
       b = np.block([np.zeros(self.N,dtype=complex),I_all[k]])
-      u_nest = sp.sparse.linalg.spsolve(self.A_op,self.A_np.T.conj()@b) #Solve A^*Au = b
+      # u_nest = sp.sparse.linalg.spsolve(self.A_op,self.A_np.T.conj()@b) #Solve A^*Au = b
+      u_nest = sp.sparse.linalg.spsolve(self.A_np,b) #Solve A^*Au = b
+      # u_nest, err_code = sp.sparse.linalg.cg(self.A_op,self.A_np.T.conj()@b,rtol=self.rtol) #Solve A^*Au = b
+      
       u_array, U_array = u_nest[:self.N], u_nest[self.N:] #splitting array
 
       # translating solutions (U = (U1 + S/L,...,UL + S/L)), with S = U1+...+UL
@@ -288,7 +291,9 @@ class DirectProblem:
     U_list = []
 
     for b in vector_list:
-      u_nest = sp.sparse.linalg.spsolve(self.A_op,self.A_np.T.conj()@b) #Solve A^*Au = b
+      # u_nest = sp.sparse.linalg.spsolve(self.A_op,self.A_np.T.conj()@b) #Solve A^*Au = b
+      u_nest, err_code = sp.sparse.linalg.cg(self.A_op,self.A_np.T.conj()@b,rtol=self.rtol) #Solve A^*Au = b
+      
       u_array, U_array = u_nest[:self.N], u_nest[self.N:] #splitting array
 
       # translating solutions (U = (U1 + S/L,...,UL + S/L)), with S = U1+...+UL
@@ -406,7 +411,7 @@ class InverseProblem(DirectProblem):
     #"Solver configurations"
     self.verbose=False
     self.weight_value=False    #Are you going to use the weight function in the Jacobian matrix?
-    self.weight_type = "Areas" #"Areas" for only area inverses, "Jacobian" for area and Jacobian column norm weights
+    self.weight_type = "Area" #"Area" for only area inverses, "Jacobian" for area and Jacobian column norm weights
     self.step_limit=30        #Step limit while solve
     self.innerstep_limit=1000 #Inner step limit while solve
     self.min_v=1E-3           #Minimal value in element for gamma_k
