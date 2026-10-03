@@ -6,8 +6,8 @@ import dolfinx.fem.petsc
 import scipy as sp
 import basix
 from petsc4py import PETSc #Linear algebra lib
-from utils import compute_gradient
-import MeshClass
+from eitx.utils import compute_gradient
+import eitx.MeshClass as MeshClass
 
 class DirectProblem:
 	"""

@@ -5,7 +5,7 @@ import dolfinx
 from dolfinx.io import gmsh as gmshio
 from mpi4py import MPI #import parallel communicator
 
-from utils import theta
+from eitx.utils import theta
 
 class MeshClass:
 	def __init__(self,electrodes, mesh_refining=1,bdr_refining=1):

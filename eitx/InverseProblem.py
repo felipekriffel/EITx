@@ -1,5 +1,5 @@
 import numpy as np
-import DirectProblem
+import eitx.DirectProblem as DirectProblem
 import dolfinx
 from mpi4py import MPI #import parallel communicator
 import numpy as np
@@ -10,7 +10,7 @@ import scipy as sp
 import basix
 from petsc4py import PETSc #Linear algebra lib
 
-from utils import compute_gradient
+from eitx.utils import compute_gradient
 
 class InverseProblem(DirectProblem):
 	def __init__(self,mesh_inverse, z_values,I_all):
