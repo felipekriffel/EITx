@@ -15,6 +15,7 @@ class DirectProblem:
   
 	"""
 	def __init__(self, mesh_object: MeshClass, z_values):
+		self.mesh_object = mesh_object
 		self.mesh = mesh_object.mesh
 		self.ds = mesh_object.ds
 		self.L = mesh_object.electrodes.L
